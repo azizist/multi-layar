@@ -16,6 +16,8 @@
 	<string>2.0</string>
 	<key>CFBundleVersion</key>
 	<string>4</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Abdul Aziz. MIT License.</string>
 	<key>LSMinimumSystemVersion</key>

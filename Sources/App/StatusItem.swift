@@ -317,13 +317,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func updateIcon(armed: Bool) {
-        // Both symbols predate the 13.0 deployment target. `lid.open` and
-        // `clamshell` do not exist as SF Symbols — do not reach for them.
-        let name = armed ? "laptopcomputer" : "moon.zzz"
-        let description = armed ? "Staying awake with the lid closed" : "Normal sleep"
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: description)
-        image?.isTemplate = true
-        statusItem.button?.image = image
+        statusItem.button?.image = MenuBarGlyph.image(armed: armed)
     }
 
     // MARK: - Windows and preferences

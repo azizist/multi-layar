@@ -18,11 +18,13 @@ ROOT="build/root"
 APP="$ROOT/Applications/Multi Layar.app"
 
 rm -rf build dist
-mkdir -p "$APP/Contents/MacOS" "$ROOT/Library/LaunchDaemons" "$ROOT/usr/local/libexec" dist
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/Library/LaunchDaemons" "$ROOT/usr/local/libexec" dist
 
 echo "==> Info.plist"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
+# Generated from Resources/AppIcon.svg by scripts/make-icon.sh.
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 echo "==> menu bar app"
 /usr/bin/swiftc \
@@ -53,7 +55,7 @@ cp uninstall.sh "$ROOT/usr/local/libexec/clamshellkeeper-uninstall.sh"
 chmod 755 "$APP/Contents/MacOS/ClamshellKeeper" \
 	"$ROOT/usr/local/libexec/clamshellkeeperd" \
 	"$ROOT/usr/local/libexec/clamshellkeeper-uninstall.sh"
-chmod 644 "$APP/Contents/Info.plist" "$ROOT/Library/LaunchDaemons/$HELPER_ID.plist"
+chmod 644 "$APP/Contents/Info.plist" "$APP/Contents/Resources/AppIcon.icns" "$ROOT/Library/LaunchDaemons/$HELPER_ID.plist"
 
 echo "==> ad-hoc signing"
 # --deep is deprecated for signing since macOS 13 and there is no nested code.
