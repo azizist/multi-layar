@@ -13,7 +13,9 @@ SDK="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
 TARGET="arm64-apple-macos15.0"   # floor set by the RealityKit scene; not swiftc's 26.0 default
 
 ROOT="build/root"
-APP="$ROOT/Applications/ClamshellKeeper.app"
+# Shown as "Multi Layar". Identifiers, the executable and the helper keep the
+# ClamshellKeeper names so existing installs upgrade in place.
+APP="$ROOT/Applications/Multi Layar.app"
 
 rm -rf build dist
 mkdir -p "$APP/Contents/MacOS" "$ROOT/Library/LaunchDaemons" "$ROOT/usr/local/libexec" dist
@@ -70,9 +72,9 @@ chmod +x scripts/postinstall
 	--install-location / \
 	--scripts scripts \
 	--ownership recommended \
-	"dist/ClamshellKeeper-$VERSION.pkg" >/dev/null
+	"dist/MultiLayar-$VERSION.pkg" >/dev/null
 
 echo
 echo "Built:"
-echo "  dist/ClamshellKeeper-$VERSION.pkg    (double-click, or: sudo installer -pkg dist/ClamshellKeeper-$VERSION.pkg -target /)"
+echo "  dist/MultiLayar-$VERSION.pkg    (double-click, or: sudo installer -pkg dist/MultiLayar-$VERSION.pkg -target /)"
 echo "  sudo ./install.sh                    (same result, from the staged tree)"

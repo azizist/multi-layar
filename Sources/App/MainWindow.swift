@@ -49,7 +49,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 700),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "ClamshellKeeper"
+        window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Multi Layar"
         window.contentMinSize = NSSize(width: 520, height: 560)
         window.isReleasedWhenClosed = false
         window.delegate = self

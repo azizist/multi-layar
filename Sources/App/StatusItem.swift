@@ -372,7 +372,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
-        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "ClamshellKeeper"
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Multi Layar"
         appMenu.addItem(withTitle: "Quit \(name)", action: #selector(quit), keyEquivalent: "q").target = self
         main.addItem(withTitle: name, action: nil, keyEquivalent: "").submenu = appMenu
 
