@@ -171,6 +171,101 @@ check(act(true, displays(builtinActive: false, lidClosed: true)) == .none,
 check(act(false, displays(builtinActive: false, lidClosed: true)) == .none,
       "lid closed: no enable attempt either")
 
+// MARK: - DisplayArrangement: where the monitor goes in the scene. Cosmetic,
+// but it is what the window is built around, so each Displays-pane layout is
+// pinned down. Coordinates are CoreGraphics global space: y grows downward.
+
+let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982)
+
+func edge(_ external: CGRect) -> DisplayLayout.Edge? {
+    if case .beside(let edge, _) = DisplayArrangement.layout(of: external, beside: laptop) { return edge }
+    return nil
+}
+func edgeOf(_ layout: DisplayLayout?) -> DisplayLayout.Edge? {
+    if case .beside(let edge, _)? = layout { return edge }
+    return nil
+}
+func offset(_ external: CGRect) -> Double? {
+    if case .beside(_, let offset) = DisplayArrangement.layout(of: external, beside: laptop) { return offset }
+    return nil
+}
+
+check(edge(CGRect(x: 1512, y: -200, width: 2560, height: 1440)) == .right, "layout: monitor to the right")
+check(edge(CGRect(x: -2560, y: -200, width: 2560, height: 1440)) == .left, "layout: monitor to the left")
+check(edge(CGRect(x: -524, y: -1440, width: 2560, height: 1440)) == .above, "layout: monitor above")
+check(edge(CGRect(x: -524, y: 982, width: 2560, height: 1440)) == .below, "layout: monitor below")
+check(edge(CGRect(x: 1400, y: -1440, width: 2560, height: 1440)) == .above,
+      "layout: a big monitor overhanging one corner is still above")
+check(edge(CGRect(x: 1512, y: -982, width: 1512, height: 982)) == .right,
+      "layout: an exact diagonal counts as side by side")
+check(abs((offset(CGRect(x: -524, y: -1440, width: 2560, height: 1440)) ?? 99)) < 0.001,
+      "layout: centred above gives offset 0")
+check((offset(CGRect(x: 1512, y: -1000, width: 1920, height: 1080)) ?? 0) < 0,
+      "layout: monitor raised to the right gives a negative offset")
+
+let monitor = ObservedDisplay(key: "1-2-3", name: "Test Monitor",
+                              sizeMillimetres: CGSize(width: 600, height: 340),
+                              bounds: CGRect(x: 1512, y: -200, width: 2560, height: 1440),
+                              asleep: false, mirrored: false)
+let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+let seen = DisplayArrangement.externals(observed: [monitor], builtinBounds: laptop, memory: [:], now: t0)
+check(edgeOf(seen.externals.first?.layout) == .right, "externals: layout read while both are on")
+check(seen.memory["1-2-3"]?.layout == seen.externals.first?.layout, "externals: layout remembered")
+
+// Lid shut or built-in turned off: its position can't be read, so keep the old one.
+let shut = DisplayArrangement.externals(observed: [monitor], builtinBounds: nil, memory: seen.memory,
+                                        now: t0.addingTimeInterval(60))
+check(edgeOf(shut.externals.first?.layout) == .right, "externals: remembered layout used while the built-in is off")
+check(DisplayArrangement.externals(observed: [monitor], builtinBounds: nil, memory: [:], now: t0)
+        .externals.first?.layout == nil, "externals: never seen beside the built-in means no layout")
+
+var mirrored = monitor
+mirrored.mirrored = true
+check(DisplayArrangement.externals(observed: [mirrored], builtinBounds: laptop, memory: [:], now: t0)
+        .externals.first?.layout == .mirrored, "externals: mirroring wins over position")
+
+var sleeping = monitor
+sleeping.asleep = true
+check(DisplayArrangement.externals(observed: [sleeping], builtinBounds: laptop, memory: [:], now: t0)
+        .externals.first?.connection == .asleep, "externals: a sleeping monitor is still connected")
+
+// Unplugged: the last one seen comes back as a ghost, and only then.
+let gone = DisplayArrangement.externals(observed: [], builtinBounds: laptop, memory: seen.memory,
+                                        now: t0.addingTimeInterval(120))
+check(gone.externals.count == 1 && gone.externals.first?.connection == .disconnected,
+      "externals: unplugged monitor kept as a disconnected outline")
+check(edgeOf(gone.externals.first?.layout) == .right, "externals: the outline stays where it was")
+check(seen.externals.allSatisfy { $0.connection != .disconnected },
+      "externals: no outline while a monitor is connected")
+check(DisplayArrangement.externals(observed: [], builtinBounds: laptop, memory: [:], now: t0)
+        .externals.isEmpty, "externals: nothing ever seen means nothing shown")
+
+var older = seen.memory["1-2-3"]!
+older.name = "Old Monitor"
+older.lastSeen = t0.addingTimeInterval(-86_400)
+let two = seen.memory.merging(["9-9-9": older]) { a, _ in a }
+check(DisplayArrangement.externals(observed: [], builtinBounds: nil, memory: two, now: t0)
+        .externals.first?.key == "1-2-3", "externals: the ghost is the most recently seen monitor")
+
+// The heartbeat must not rewrite the defaults when nothing changed.
+let again = DisplayArrangement.externals(observed: [monitor], builtinBounds: laptop, memory: seen.memory,
+                                         now: t0.addingTimeInterval(20))
+check(again.memory == seen.memory, "memory: unchanged display is not rewritten on a heartbeat")
+let later = DisplayArrangement.externals(observed: [monitor], builtinBounds: laptop, memory: seen.memory,
+                                         now: t0.addingTimeInterval(DisplayArrangement.lastSeenResolution + 1))
+check(later.memory != seen.memory, "memory: timestamp refreshed once the resolution has passed")
+
+var many: [String: RememberedDisplay] = [:]
+for i in 0..<(DisplayArrangement.memoryLimit + 3) {
+    var record = older
+    record.lastSeen = t0.addingTimeInterval(Double(i))
+    many["k\(i)"] = record
+}
+let pruned = DisplayArrangement.externals(observed: [], builtinBounds: nil, memory: many, now: t0).memory
+check(pruned.count == DisplayArrangement.memoryLimit && pruned["k0"] == nil,
+      "memory: capped, oldest dropped first")
+
 print("")
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILURE(S)")
 exit(failures == 0 ? 0 : 1)
