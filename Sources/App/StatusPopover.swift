@@ -13,13 +13,24 @@ final class StatusPopover {
         let view = PopoverView(devices: devices, controls: controls, close: { [weak popover] in
             popover?.performClose(nil)
         })
-        popover.contentViewController = NSHostingController(rootView: view)
+        let hosting = NSHostingController(rootView: view)
+        // Let the popover follow the SwiftUI content's size (a status note
+        // appearing makes it taller), resizing with the arrow kept in place.
+        hosting.sizingOptions = .preferredContentSize
+        popover.contentViewController = hosting
     }
 
     func toggle(from button: NSStatusBarButton) {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            // Size it before showing. Unsized, NSPopover places itself as if it
+            // were its 320×320 default, then the window shrinks to the real
+            // content from the top — AppKit keeps the bottom edge — and the
+            // popover lands well below the menu bar.
+            if let view = popover.contentViewController?.view {
+                popover.contentSize = view.fittingSize
+            }
             // A transient popover only closes on an outside click if the app is active.
             NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
