@@ -33,8 +33,8 @@ Nothing is shared between them but the menu.
 Built and tested on **Apple Silicon** (M2 Pro, Mac14,9) running **macOS 26.5.2
 and macOS 27.0** (build 26A428). Nothing else has been tried.
 
-The binaries have a macOS 13.0 deployment target, so they should launch further
-back than that, but three of the load-bearing pieces are not contractual:
+The binaries have a macOS 15.0 deployment target, so they should launch further
+back than the versions tested, but three of the load-bearing pieces are not contractual:
 
 - **`pmset disablesleep` is undocumented.** It is absent from `man pmset`,
   present in the binary, and traceable through Apple's published
@@ -270,4 +270,5 @@ Resources/                        Info.plist, LaunchDaemon plist
 build.sh test.sh install.sh uninstall.sh phase0-test.sh
 ```
 
-Built with `swiftc` directly — no Xcode project. Deployment target is macOS 13.0 (the floor set by `SMAppService`, used for Start at Login).
+Built with `swiftc` directly — no Xcode project. Deployment target is macOS 15.0, the floor set by the 3D window: RealityKit's offscreen
+`RealityRenderer` and the generated meshes and lighting it uses.

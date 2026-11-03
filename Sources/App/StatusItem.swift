@@ -18,6 +18,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let client = DaemonClient()
     /// What the UI draws. Refreshed after every decision and helper reply.
     private let devices = DeviceModel()
+    /// Created on first open; the controller itself predates the window and
+    /// is not main-actor isolated, so it reaches the window through openWindow().
+    private var mainWindow: MainWindowController?
     private var statusItem: NSStatusItem!
     private var heartbeat: Timer?
     private var lastStatus: Wire.Status?
@@ -119,6 +122,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         RunLoop.main.add(timer, forMode: .common)
         heartbeat = timer
         push()
+    }
+
+    /// Clicking the Dock icon brings the window back, minimized or not.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openWindow()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -304,6 +313,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(informationItem())
         menu.addItem(.separator())
 
+        let open = NSMenuItem(title: "Open Window…", action: #selector(openWindow), keyEquivalent: "")
+        open.target = self
+        menu.addItem(open)
+        menu.addItem(.separator())
+
         let toggle = NSMenuItem(title: "Keep awake with lid closed",
                                 action: #selector(toggleKeepAwake), keyEquivalent: "")
         toggle.target = self
@@ -375,6 +389,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Actions
+
+    @objc private func openWindow() {
+        refreshDeviceState()
+        // Menu actions and the reopen callback always arrive on the main thread.
+        MainActor.assumeIsolated {
+            if mainWindow == nil { mainWindow = MainWindowController(devices: devices) }
+            mainWindow?.show()
+        }
+    }
 
     @objc private func toggleKeepAwake() {
         keepAwake.toggle()

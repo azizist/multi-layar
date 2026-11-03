@@ -21,6 +21,84 @@ struct DeviceState: Equatable {
     static let initial = DeviceState(lidClosed: false, builtinScreen: .on, externals: [],
                                      builtinNote: "", lidClosedMode: .off,
                                      batteryPercent: nil, onAC: false)
+
+    /// The external the scene draws: the first connected one, else the
+    /// remembered outline, else none.
+    var shownExternal: ExternalDisplay? {
+        externals.first { $0.connection != .disconnected } ?? externals.first
+    }
+
+    /// What VoiceOver reads for the 3D scene, which is otherwise a picture.
+    var spokenSummary: String {
+        var parts: [String] = []
+        if lidClosed {
+            var lid = "MacBook lid closed"
+            if case .active = lidClosedMode { lid += ", staying awake" }
+            parts.append(lid)
+        } else {
+            let screen: String
+            switch builtinScreen {
+            case .on: screen = "on"
+            case .off: screen = "off"
+            case .asleep: screen = "asleep"
+            }
+            parts.append("MacBook lid open, built-in display \(screen)")
+        }
+        if let external = shownExternal {
+            let connection: String
+            switch external.connection {
+            case .on: connection = "on"
+            case .asleep: connection = "asleep"
+            case .disconnected: connection = "disconnected"
+            }
+            var text = "\(external.name) \(connection)"
+            if let layout = external.layout { text += ", \(layout.summary)" }
+            parts.append(text)
+        } else {
+            parts.append("No external display")
+        }
+        return parts.joined(separator: ". ") + "."
+    }
+}
+
+/// Where the laptop and monitor stand on the desk, in metres: the desk top
+/// is y = 0, x runs right and z runs toward the viewer.
+struct DeskPlacement: Equatable {
+    var laptop: SIMD3<Float>
+    var monitor: SIMD3<Float>
+    /// The monitor's stand height. Taller when stacked, so its screen clears
+    /// the open lid in front of it.
+    var stand: Float
+    var stacked: Bool
+
+    static let laptopWidth: Float = 0.31
+    static let gap: Float = 0.08
+    /// Used when the monitor does not report a physical size.
+    static let defaultMonitorWidth: Float = 0.53
+    /// Wider monitors are drawn at this width so the desk still holds both.
+    static let maxMonitorWidth: Float = 0.85
+
+    static func placing(_ layout: DisplayLayout?, monitorWidth: Float) -> DeskPlacement {
+        switch layout {
+        case .beside(.above, let offset)?, .beside(.below, let offset)?:
+            // Below is drawn like above: nobody's desk has the monitor under the laptop.
+            let shift = Float(max(-0.5, min(0.5, offset))) * laptopWidth
+            return DeskPlacement(laptop: [0, 0, 0.12], monitor: [shift, 0, -0.16],
+                                 stand: 0.25, stacked: true)
+        default:
+            // Right, left, mirrored, and never-seen all stand side by side.
+            let width = monitorWidth > 0 ? min(max(monitorWidth, 0.3), maxMonitorWidth) : defaultMonitorWidth
+            let total = laptopWidth + gap + width
+            var laptopX = -total / 2 + laptopWidth / 2
+            var monitorX = total / 2 - width / 2
+            if case .beside(.left, _)? = layout {
+                laptopX = -laptopX
+                monitorX = -monitorX
+            }
+            return DeskPlacement(laptop: [laptopX, 0, 0.1], monitor: [monitorX, 0, -0.12],
+                                 stand: 0.12, stacked: false)
+        }
+    }
 }
 
 enum ScreenState: Equatable {

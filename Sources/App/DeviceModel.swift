@@ -12,6 +12,16 @@ final class DeviceModel: ObservableObject {
     @Published private(set) var state = DeviceState.initial
 
     private static let memoryKey = "rememberedDisplays"
+    /// Stands in for a display key wherever the built-in is meant.
+    static let builtinKey = "builtin"
+
+    /// Stable across lid cycles and reconnects, unlike the display ID.
+    /// Two identical monitors without serial numbers share a key; the cost is
+    /// one remembered position for both.
+    static func key(for id: CGDirectDisplayID) -> String {
+        if CGDisplayIsBuiltin(id) != 0 { return builtinKey }
+        return "\(CGDisplayVendorNumber(id))-\(CGDisplayModelNumber(id))-\(CGDisplaySerialNumber(id))"
+    }
 
     func refresh(builtinNote: String, lidClosedMode: LidClosedMode) {
         let builtinActive = InternalDisplay.builtinIsActive()
@@ -55,9 +65,7 @@ final class DeviceModel: ObservableObject {
         return InternalDisplay.onlineDisplays()
             .filter { CGDisplayIsBuiltin($0) == 0 }
             .map { id in
-                // Two identical monitors without serial numbers share a key;
-                // the cost is one remembered position for both.
-                let key = "\(CGDisplayVendorNumber(id))-\(CGDisplayModelNumber(id))-\(CGDisplaySerialNumber(id))"
+                let key = key(for: id)
                 return ObservedDisplay(
                     key: key,
                     // A sleeping display has no NSScreen, so fall back to the last name seen.
