@@ -108,7 +108,9 @@ So a downloaded `.pkg` needs one of these:
 xattr -d com.apple.quarantine ~/Downloads/MultiLayar-2.0.pkg
 ```
 
-…or right-click the package in Finder, choose **Open**, then **Open anyway**.
+…or double-click it, dismiss the warning, then go to **System Settings → Privacy &
+Security** and click **Open Anyway** next to the blocked package. (Right-click →
+Open no longer gets past Gatekeeper on macOS 15 and later, which this app requires.)
 
 Building from source avoids the question entirely, and has the advantage that
 you can read what you are about to give a root LaunchDaemon to.
