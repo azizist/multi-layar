@@ -10,7 +10,7 @@ APP_ID="com.azizzet.clamshellkeeper"
 HELPER_ID="com.azizzet.clamshellkeeper.helper"
 VERSION="1.1"
 SDK="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
-TARGET="arm64-apple-macos13.0"   # floor set by SMAppService; not swiftc's 26.0 default
+TARGET="arm64-apple-macos15.0"   # floor set by the RealityKit scene; not swiftc's 26.0 default
 
 ROOT="build/root"
 APP="$ROOT/Applications/ClamshellKeeper.app"
@@ -27,6 +27,7 @@ echo "==> menu bar app"
 	-sdk "$SDK" -target "$TARGET" -swift-version 5 -O -emit-executable \
 	-module-name ClamshellKeeper \
 	-framework AppKit -framework IOKit -framework ServiceManagement \
+	-framework SwiftUI -framework RealityKit -framework Metal \
 	-Xlinker -dead_strip \
 	-o "$APP/Contents/MacOS/ClamshellKeeper" \
 	Sources/Shared/*.swift Sources/App/*.swift

@@ -266,6 +266,39 @@ let pruned = DisplayArrangement.externals(observed: [], builtinBounds: nil, memo
 check(pruned.count == DisplayArrangement.memoryLimit && pruned["k0"] == nil,
       "memory: capped, oldest dropped first")
 
+// MARK: - DeskPlacement: the arrangement as furniture.
+
+let right = DeskPlacement.placing(.beside(.right, offset: 0), monitorWidth: 0.48)
+let left = DeskPlacement.placing(.beside(.left, offset: 0), monitorWidth: 0.48)
+let above = DeskPlacement.placing(.beside(.above, offset: 0), monitorWidth: 0.48)
+check(right.monitor.x > right.laptop.x && !right.stacked, "desk: right puts the monitor right of the laptop")
+check(left.monitor.x < left.laptop.x && left.monitor.x == -right.monitor.x, "desk: left mirrors right")
+check(above.stacked && above.monitor.z < above.laptop.z && above.stand > right.stand,
+      "desk: above stands the monitor behind the laptop, raised")
+check(DeskPlacement.placing(.beside(.below, offset: 0), monitorWidth: 0.48) == above,
+      "desk: below is drawn like above")
+check(DeskPlacement.placing(nil, monitorWidth: 0.48) == right, "desk: never-seen layout defaults to the right")
+check(DeskPlacement.placing(.mirrored, monitorWidth: 0.48) == right, "desk: mirrored stands side by side")
+check(abs(DeskPlacement.placing(.beside(.above, offset: 9), monitorWidth: 0.48).monitor.x
+          - 0.5 * DeskPlacement.laptopWidth) < 0.0001, "desk: a large offset is clamped")
+let huge = DeskPlacement.placing(.beside(.right, offset: 0), monitorWidth: 1.2)
+check(huge.monitor.x + DeskPlacement.maxMonitorWidth / 2 <= 0.65 + 0.0001,
+      "desk: an ultra-wide monitor still fits on the desk")
+check(DeskPlacement.placing(.beside(.right, offset: 0), monitorWidth: 0) ==
+      DeskPlacement.placing(.beside(.right, offset: 0), monitorWidth: DeskPlacement.defaultMonitorWidth),
+      "desk: unknown monitor size uses the default")
+
+// MARK: - The spoken summary VoiceOver reads for the scene.
+
+var described = DeviceState.initial
+described.externals = seen.externals
+check(described.spokenSummary == "MacBook lid open, built-in display on. Test Monitor on, on the right.",
+      "summary: both on, side by side")
+described.lidClosed = true
+described.lidClosedMode = .active
+check(described.spokenSummary.hasPrefix("MacBook lid closed, staying awake."), "summary: clamshell, awake")
+check(DeviceState.initial.spokenSummary.hasSuffix("No external display."), "summary: nothing connected")
+
 print("")
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILURE(S)")
 exit(failures == 0 ? 0 : 1)
