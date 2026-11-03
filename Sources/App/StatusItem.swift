@@ -16,6 +16,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let defaultBatteryFloor = 20
 
     private let client = DaemonClient()
+    /// What the UI draws. Refreshed after every decision and helper reply.
+    private let devices = DeviceModel()
     private var statusItem: NSStatusItem!
     private var heartbeat: Timer?
     private var lastStatus: Wire.Status?
@@ -94,6 +96,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.push()
             }
 
+        // Display sleep changes nothing the controller acts on, but the UI
+        // shows it, and no other callback fires for it.
+        for name in [NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: name, object: nil, queue: .main) { [weak self] _ in
+                    self?.refreshDeviceState()
+                }
+        }
+
         // The heartbeat is the deadman switch: stop sending and the helper
         // restores normal sleep within a minute, whatever killed us.
         let timer = Timer(timeInterval: Wire.heartbeatInterval, repeats: true) {
@@ -129,6 +140,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// path terminates after one pass instead of oscillating.
     private func reconcileDisplay() {
         guard !reconcilingDisplay else { return }
+        // Runs after any change below has been verified, so the UI only ever
+        // sees the outcome, never the request.
+        defer { refreshDeviceState() }
 
         let snapshot = DisplaySnapshot(
             builtinActive: InternalDisplay.builtinIsActive(),
@@ -252,7 +266,22 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.lastStatus = nil
                 self.updateIcon(armed: false)
             }
+            self.refreshDeviceState()
         }
+    }
+
+    private func refreshDeviceState() {
+        let mode: LidClosedMode
+        if !helperReachable {
+            mode = .helperMissing
+        } else if lastStatus?.armed == true {
+            mode = .active
+        } else if keepAwake, let reason = lastStatus?.reason, !reason.isEmpty {
+            mode = .refused(reason)
+        } else {
+            mode = .off
+        }
+        devices.refresh(builtinNote: displayReason, lidClosedMode: mode)
     }
 
     private func updateIcon(armed: Bool) {
@@ -270,6 +299,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Rebuilt on open rather than on a timer — it only needs to be right at
     /// the moment someone is looking at it.
     func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshDeviceState()
         menu.removeAllItems()
         menu.addItem(informationItem())
         menu.addItem(.separator())
@@ -321,19 +351,23 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func informationItem() -> NSMenuItem {
         let text: String
-        if !helperReachable {
+        let state = devices.state
+        switch state.lidClosedMode {
+        case .helperMissing:
             text = "Helper not running — see README"
-        } else {
-            let external = DisplayWatcher.shared.externalCount
-            let battery = PowerInfo.batteryPercent().map { "\($0)%" } ?? "—"
-            let power = PowerInfo.onAC() ? "AC" : "battery"
-            var state = lastStatus?.armed == true ? "active" : "off"
-            if let reason = lastStatus?.reason, !reason.isEmpty, keepAwake {
-                state = "off — \(reason)"
+        case .off, .active, .refused:
+            var externals = "\(DisplayWatcher.shared.externalCount) external"
+            if let layout = state.externals.first(where: { $0.connection != .disconnected })?.layout {
+                externals += " \(layout.summary)"
             }
-            var builtin = InternalDisplay.builtinIsActive() ? "built-in on" : "built-in off"
-            if !displayReason.isEmpty { builtin += " — \(displayReason)" }
-            text = "\(external) external · \(builtin) · \(battery) on \(power) · Lid-closed mode: \(state)"
+            let battery = state.batteryPercent.map { "\($0)%" } ?? "—"
+            let power = state.onAC ? "AC" : "battery"
+            var mode = "off"
+            if case .active = state.lidClosedMode { mode = "active" }
+            if case .refused(let reason) = state.lidClosedMode { mode = "off — \(reason)" }
+            var builtin = state.builtinScreen == .off ? "built-in off" : "built-in on"
+            if !state.builtinNote.isEmpty { builtin += " — \(state.builtinNote)" }
+            text = "\(externals) · \(builtin) · \(battery) on \(power) · Lid-closed mode: \(mode)"
         }
         let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
         item.isEnabled = false
