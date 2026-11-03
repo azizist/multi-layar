@@ -23,6 +23,7 @@ final class SceneRenderer: ObservableObject {
     private var lastFrame = Date()
     private var renderInFlight = false
     private var hasState = false
+    private var isDark: Bool?
 
     /// Large windows are drawn at most this many pixels on a side; the
     /// image is scaled up, which a soft 3D scene hides well.
@@ -42,8 +43,14 @@ final class SceneRenderer: ObservableObject {
         }
     }
 
-    func setBackground(_ color: CGColor) {
-        renderer.cameraSettings.colorBackground = .color(color)
+    /// Follows the window's light or dark appearance: the background behind
+    /// the desk, and the desk itself.
+    func setAppearance(dark: Bool) {
+        guard dark != isDark else { return }
+        isDark = dark
+        renderer.cameraSettings.colorBackground = .color(dark ? CGColor(gray: 0.16, alpha: 1)
+                                                              : CGColor(gray: 0.87, alpha: 1))
+        scene.setTable(dark ? .dark : .light)
         animate(for: 0)
     }
 

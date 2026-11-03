@@ -1,13 +1,23 @@
 import AppKit
 import RealityKit
 
-/// What the tabletop is made of. Only plain white ships; `texture` is the
+/// What the tabletop is made of. Only plain colours ship; `texture` is the
 /// hook for wood, HPL and the like — a tileable image repeated across the top.
 enum TableFinish {
     case plain(NSColor)
     case texture(CGImage, tilesPerMetre: Float)
+}
 
-    static let `default` = TableFinish.plain(NSColor(white: 0.94, alpha: 1))
+/// The desk as a whole: its top and its legs.
+struct TableLook {
+    var top: TableFinish
+    var legs: NSColor
+
+    /// White laminate on white legs, for the light appearance.
+    static let light = TableLook(top: .plain(NSColor(white: 0.94, alpha: 1)), legs: NSColor(white: 0.93, alpha: 1))
+    /// Dark grey laminate on black legs, for the dark appearance.
+    static let dark = TableLook(top: .plain(NSColor(red: 0.40, green: 0.39, blue: 0.37, alpha: 1)),
+                                legs: NSColor(white: 0.07, alpha: 1))
 }
 
 /// The desk, the laptop and the monitor, built from primitives in code so the
@@ -31,6 +41,8 @@ final class DeviceScene {
     private let monitorScreen: ScreenFace
     private let monitorNeck: ModelEntity
     private var monitorSize = SIMD2<Float>(0, 0)
+    private let tableTop: ModelEntity
+    private var tableLegs: [ModelEntity] = []
     /// Last target per entity, so an unchanged state starts no animation.
     private var targets: [ObjectIdentifier: Transform] = [:]
 
@@ -38,7 +50,7 @@ final class DeviceScene {
     private static let hingePosition = SIMD3<Float>(0, 0.012, -0.11)
     private static let animation: TimeInterval = 0.8
 
-    init(table finish: TableFinish = .default) {
+    init(table look: TableLook = .light) {
         builtinScreen = ScreenFace(ModelEntity(mesh: .generatePlane(width: 0.29, height: 0.185)))
         monitorScreen = ScreenFace(ModelEntity())
         monitorPanel = ModelEntity(mesh: .generateBox(size: 0.01), materials: [Self.bezel])
@@ -47,7 +59,9 @@ final class DeviceScene {
         statusLight = ModelEntity(mesh: .generateBox(width: 0.014, height: 0.0025, depth: 0.002),
                                   materials: [UnlitMaterial(color: NSColor(red: 0.2, green: 0.85, blue: 0.4, alpha: 1))])
 
-        root.addChild(Self.makeTable(finish))
+        tableTop = ModelEntity(mesh: .generateBox(size: Self.tableSize, cornerRadius: 0.004))
+        root.addChild(makeTable())
+        setTable(look)
         buildLaptop()
         buildMonitor()
 
@@ -199,40 +213,46 @@ final class DeviceScene {
 
     static let tableSize = SIMD3<Float>(1.3, 0.025, 0.62)
 
-    /// A plain desk: white laminate top on round white legs with dark feet.
-    private static func makeTable(_ finish: TableFinish) -> Entity {
+    /// A plain desk: a laminate top on four round legs with dark feet.
+    private func makeTable() -> Entity {
         let table = Entity()
-        var material = PhysicallyBasedMaterial()
-        material.roughness = 0.6
-        material.metallic = 0.0
-        switch finish {
-        case .plain(let color):
-            material.baseColor = .init(tint: color)
-        case .texture(let image, let tilesPerMetre):
-            if let texture = try? TextureResource(image: image, options: .init(semantic: .color)) {
-                material.baseColor = .init(texture: .init(texture))
-                material.textureCoordinateTransform.scale = [tableSize.x * tilesPerMetre, tableSize.z * tilesPerMetre]
-            }
-        }
-        let top = ModelEntity(mesh: .generateBox(size: tableSize, cornerRadius: 0.004), materials: [material])
-        top.position = [0, -tableSize.y / 2, 0]
-        table.addChild(top)
+        tableTop.position = [0, -Self.tableSize.y / 2, 0]
+        table.addChild(tableTop)
 
         let legHeight: Float = 0.7, footHeight: Float = 0.012, radius: Float = 0.0175
-        let leg = SimpleMaterial(color: NSColor(white: 0.93, alpha: 1), roughness: 0.4, isMetallic: false)
-        let cap = SimpleMaterial(color: NSColor(white: 0.08, alpha: 1), roughness: 0.8, isMetallic: false)
-        let inset = SIMD2<Float>(tableSize.x / 2 - 0.05, tableSize.z / 2 - 0.05)
+        let cap = SimpleMaterial(color: NSColor(white: 0.05, alpha: 1), roughness: 0.8, isMetallic: false)
+        let inset = SIMD2<Float>(Self.tableSize.x / 2 - 0.05, Self.tableSize.z / 2 - 0.05)
         for (x, z) in [(-inset.x, -inset.y), (inset.x, -inset.y), (-inset.x, inset.y), (inset.x, inset.y)] {
-            let tube = ModelEntity(mesh: .generateCylinder(height: legHeight - footHeight, radius: radius),
-                                   materials: [leg])
-            tube.position = [x, -tableSize.y - (legHeight - footHeight) / 2, z]
+            let tube = ModelEntity(mesh: .generateCylinder(height: legHeight - footHeight, radius: radius))
+            tube.position = [x, -Self.tableSize.y - (legHeight - footHeight) / 2, z]
             let foot = ModelEntity(mesh: .generateCylinder(height: footHeight, radius: radius * 0.95),
                                    materials: [cap])
-            foot.position = [x, -tableSize.y - legHeight + footHeight / 2, z]
+            foot.position = [x, -Self.tableSize.y - legHeight + footHeight / 2, z]
+            tableLegs.append(tube)
             table.addChild(tube)
             table.addChild(foot)
         }
         return table
+    }
+
+    /// Repaints the desk. Returns nothing to animate: it is a material swap.
+    func setTable(_ look: TableLook) {
+        var top = PhysicallyBasedMaterial()
+        top.roughness = 0.6
+        top.metallic = 0.0
+        switch look.top {
+        case .plain(let color):
+            top.baseColor = .init(tint: color)
+        case .texture(let image, let tilesPerMetre):
+            if let texture = try? TextureResource(image: image, options: .init(semantic: .color)) {
+                top.baseColor = .init(texture: .init(texture))
+                top.textureCoordinateTransform.scale = [Self.tableSize.x * tilesPerMetre,
+                                                        Self.tableSize.z * tilesPerMetre]
+            }
+        }
+        tableTop.model?.materials = [top]
+        let legs = SimpleMaterial(color: look.legs, roughness: 0.4, isMetallic: false)
+        for leg in tableLegs { leg.model?.materials = [legs] }
     }
 
     // MARK: - Lighting and fallbacks

@@ -299,6 +299,14 @@ described.lidClosedMode = .active
 check(described.spokenSummary.hasPrefix("MacBook lid closed, staying awake."), "summary: clamshell, awake")
 check(DeviceState.initial.spokenSummary.hasSuffix("No external display."), "summary: nothing connected")
 
+// MARK: - Preferences: the app must never become unreachable.
+
+check(Preferences.dockIcon(chosen: .whileWindowOpen, menuBarIcon: false) == .always,
+      "dock: hiding the menu bar icon forces the Dock icon on")
+check(Preferences.dockIcon(chosen: .always, menuBarIcon: false) == .always, "dock: always stays always")
+check(Preferences.dockIcon(chosen: .whileWindowOpen, menuBarIcon: true) == .whileWindowOpen,
+      "dock: with the menu bar icon shown, the choice is honoured")
+
 print("")
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILURE(S)")
 exit(failures == 0 ? 0 : 1)

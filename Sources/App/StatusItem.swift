@@ -1,12 +1,12 @@
 import AppKit
 import ServiceManagement
 
-/// The menu bar UI and the policy that drives the helper.
+/// The menu bar icon, the windows, and the policy that drives the helper.
 ///
 /// "Armed" here is only ever a *request*. The helper decides, and it will
 /// refuse or revoke whenever it cannot independently confirm that an external
 /// display is attached and a console user is present.
-final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppController: NSObject, NSApplicationDelegate {
 
     private enum Key {
         static let keepAwake = "keepAwakeEnabled"
@@ -18,9 +18,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let client = DaemonClient()
     /// What the UI draws. Refreshed after every decision and helper reply.
     private let devices = DeviceModel()
-    /// Created on first open; the controller itself predates the window and
-    /// is not main-actor isolated, so it reaches the window through openWindow().
+    /// The switches every surface shows. Created first thing at launch.
+    private var controls: Controls!
+    // Created on first use. The controller predates them and is not
+    // main-actor isolated, so it reaches each through one MainActor hop;
+    // every caller is a main-thread callback.
     private var mainWindow: MainWindowController?
+    private var popover: StatusPopover?
+    private var settingsWindow: SettingsWindowController?
     private var statusItem: NSStatusItem!
     private var heartbeat: Timer?
     private var lastStatus: Wire.Status?
@@ -55,12 +60,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         LoginItem.refreshIfRebuilt()
+        controls = makeControls()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let menu = NSMenu()
-        menu.delegate = self
-        statusItem.menu = menu
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(togglePopover)
         updateIcon(armed: false)
+        installMainMenu()
 
         // Put the built-in back before anything else, unconditionally. The
         // analogue of the helper's "first act on every load is disablesleep 0":
@@ -122,6 +128,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         RunLoop.main.add(timer, forMode: .common)
         heartbeat = timer
         push()
+
+        applyPreferences()
+        if Preferences.openWindowAtLogin { openWindow() }
     }
 
     /// Clicking the Dock icon brings the window back, minimized or not.
@@ -291,6 +300,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mode = .off
         }
         devices.refresh(builtinNote: displayReason, lidClosedMode: mode)
+        controls?.update(controlValues())
+    }
+
+    private func controlValues() -> Controls.Values {
+        Controls.Values(keepAwake: keepAwake,
+                        externalOnly: externalOnly,
+                        batteryFloor: batteryFloor > 0,
+                        startAtLogin: LoginItem.isEnabled,
+                        confirmDisplayOff: !UserDefaults.standard.bool(forKey: Key.skipDisplayConfirmation),
+                        hotkey: hotkeyRegistered ? Hotkey.displayName : nil,
+                        theme: Preferences.theme,
+                        showMenuBarIcon: Preferences.showMenuBarIcon,
+                        dockIcon: Preferences.dockIcon,
+                        openWindowAtLogin: Preferences.openWindowAtLogin)
     }
 
     private func updateIcon(armed: Bool) {
@@ -303,99 +326,91 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.image = image
     }
 
-    // MARK: - Menu
+    // MARK: - Windows and preferences
 
-    /// Rebuilt on open rather than on a timer — it only needs to be right at
-    /// the moment someone is looking at it.
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        refreshDeviceState()
-        menu.removeAllItems()
-        menu.addItem(informationItem())
-        menu.addItem(.separator())
-
-        let open = NSMenuItem(title: "Open Window…", action: #selector(openWindow), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
-        menu.addItem(.separator())
-
-        let toggle = NSMenuItem(title: "Keep awake with lid closed",
-                                action: #selector(toggleKeepAwake), keyEquivalent: "")
-        toggle.target = self
-        toggle.state = keepAwake ? .on : .off
-        menu.addItem(toggle)
-
-        let floor = NSMenuItem(title: "Restore sleep below \(Self.defaultBatteryFloor)% battery",
-                               action: #selector(toggleBatteryFloor), keyEquivalent: "")
-        floor.target = self
-        floor.state = batteryFloor > 0 ? .on : .off
-        menu.addItem(floor)
-
-        menu.addItem(.separator())
-
-        let externalOnlyItem = NSMenuItem(title: "Use external display only",
-                                          action: #selector(toggleExternalOnly), keyEquivalent: "")
-        externalOnlyItem.target = self
-        externalOnlyItem.state = externalOnly ? .on : .off
-        if hotkeyRegistered {
-            // Shown as a hint only — the hotkey is registered system-wide, not
-            // by AppKit, so it works whether or not the menu is open.
-            externalOnlyItem.toolTip = "Shortcut: \(Hotkey.displayName)"
-            externalOnlyItem.title = "Use external display only    \(Hotkey.displayName)"
-        }
-        menu.addItem(externalOnlyItem)
-
-        menu.addItem(.separator())
-
-        let login = NSMenuItem(title: "Start at Login",
-                               action: #selector(toggleLoginItem), keyEquivalent: "")
-        login.target = self
-        login.state = LoginItem.isEnabled ? .on : .off
-        menu.addItem(login)
-
-        let escape = NSMenuItem(title: "Copy emergency reset command",
-                                action: #selector(copyEscapeHatch), keyEquivalent: "")
-        escape.target = self
-        menu.addItem(escape)
-
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
-        quit.target = self
-        menu.addItem(quit)
+    private func makeControls() -> Controls {
+        Controls(actions: .init(
+            toggleKeepAwake: { [weak self] in self?.toggleKeepAwake() },
+            toggleExternalOnly: { [weak self] in self?.toggleExternalOnly() },
+            toggleBatteryFloor: { [weak self] in self?.toggleBatteryFloor() },
+            toggleStartAtLogin: { [weak self] in self?.toggleLoginItem() },
+            toggleConfirmDisplayOff: { [weak self] in self?.toggleConfirmDisplayOff() },
+            copyResetCommand: { [weak self] in self?.copyEscapeHatch() },
+            openWindow: { [weak self] in self?.openWindow() },
+            openSettings: { [weak self] in self?.openSettings() },
+            quit: { [weak self] in self?.quit() },
+            setTheme: { [weak self] in Preferences.theme = $0; self?.applyPreferences() },
+            setShowMenuBarIcon: { [weak self] in Preferences.showMenuBarIcon = $0; self?.applyPreferences() },
+            setDockIcon: { [weak self] in Preferences.dockIcon = $0; self?.applyPreferences() },
+            setOpenWindowAtLogin: { [weak self] in Preferences.openWindowAtLogin = $0; self?.applyPreferences() }))
     }
 
-    private func informationItem() -> NSMenuItem {
-        let text: String
-        let state = devices.state
-        switch state.lidClosedMode {
-        case .helperMissing:
-            text = "Helper not running — see README"
-        case .off, .active, .refused:
-            var externals = "\(DisplayWatcher.shared.externalCount) external"
-            if let layout = state.externals.first(where: { $0.connection != .disconnected })?.layout {
-                externals += " \(layout.summary)"
-            }
-            let battery = state.batteryPercent.map { "\($0)%" } ?? "—"
-            let power = state.onAC ? "AC" : "battery"
-            var mode = "off"
-            if case .active = state.lidClosedMode { mode = "active" }
-            if case .refused(let reason) = state.lidClosedMode { mode = "off — \(reason)" }
-            var builtin = state.builtinScreen == .off ? "built-in off" : "built-in on"
-            if !state.builtinNote.isEmpty { builtin += " — \(state.builtinNote)" }
-            text = "\(externals) · \(builtin) · \(battery) on \(power) · Lid-closed mode: \(mode)"
+    private func applyPreferences() {
+        statusItem.isVisible = Preferences.showMenuBarIcon
+        switch Preferences.theme {
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .system: NSApp.appearance = nil
         }
-        let item = NSMenuItem(title: text, action: nil, keyEquivalent: "")
-        item.isEnabled = false
-        return item
+        applyDockPolicy()
+        MainActor.assumeIsolated { mainWindow?.appearanceChanged() }
+        controls.update(controlValues())
+    }
+
+    /// A Dock icon while the main window exists, and always when chosen —
+    /// or when the menu bar icon is hidden, since it is then the only way in.
+    private func applyDockPolicy() {
+        let windowOpen = MainActor.assumeIsolated { mainWindow?.isOpen ?? false }
+        let dock = windowOpen || Preferences.effectiveDockIcon == .always
+        NSApp.setActivationPolicy(dock ? .regular : .accessory)
+    }
+
+    /// The app menu and Window menu, so ⌘, ⌘Q ⌘M and ⌘W work while a window
+    /// is in front. Without a main menu an accessory app has none of them.
+    private func installMainMenu() {
+        let main = NSMenu()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "ClamshellKeeper"
+        appMenu.addItem(withTitle: "Quit \(name)", action: #selector(quit), keyEquivalent: "q").target = self
+        main.addItem(withTitle: name, action: nil, keyEquivalent: "").submenu = appMenu
+
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        main.addItem(withTitle: "Window", action: nil, keyEquivalent: "").submenu = windowMenu
+        NSApp.mainMenu = main
+        NSApp.windowsMenu = windowMenu
     }
 
     // MARK: - Actions
 
+    @objc private func togglePopover() {
+        refreshDeviceState()
+        MainActor.assumeIsolated {
+            if popover == nil { popover = StatusPopover(devices: devices, controls: controls) }
+            if let button = statusItem.button { popover?.toggle(from: button) }
+        }
+    }
+
     @objc private func openWindow() {
         refreshDeviceState()
-        // Menu actions and the reopen callback always arrive on the main thread.
         MainActor.assumeIsolated {
-            if mainWindow == nil { mainWindow = MainWindowController(devices: devices) }
+            if mainWindow == nil {
+                let window = MainWindowController(devices: devices, controls: controls)
+                window.onClose = { [weak self] in self?.applyDockPolicy() }
+                mainWindow = window
+            }
             mainWindow?.show()
+        }
+    }
+
+    @objc private func openSettings() {
+        refreshDeviceState()
+        MainActor.assumeIsolated {
+            if settingsWindow == nil { settingsWindow = SettingsWindowController(controls: controls) }
+            settingsWindow?.show()
         }
     }
 
@@ -441,6 +456,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             Toast.show("Built-in display on")
         }
+        // The intent can be reverted above after the reconcile already ran.
+        refreshDeviceState()
     }
 
     @objc private func toggleBatteryFloor() {
@@ -450,12 +467,20 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleLoginItem() {
         LoginItem.setEnabled(!LoginItem.isEnabled)
+        refreshDeviceState()
+    }
+
+    private func toggleConfirmDisplayOff() {
+        let skip = UserDefaults.standard.bool(forKey: Key.skipDisplayConfirmation)
+        UserDefaults.standard.set(!skip, forKey: Key.skipDisplayConfirmation)
+        refreshDeviceState()
     }
 
     /// The documented way out if this tool ever fails with the flag set.
     @objc private func copyEscapeHatch() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString("sudo pmset -a disablesleep 0", forType: .string)
+        Toast.show("Reset command copied")
     }
 
     @objc private func quit() {
