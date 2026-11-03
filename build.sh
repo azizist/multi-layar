@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 
 APP_ID="com.azizzet.clamshellkeeper"
 HELPER_ID="com.azizzet.clamshellkeeper.helper"
-VERSION="1.1"
+VERSION="2.0"
 SDK="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
 TARGET="arm64-apple-macos15.0"   # floor set by the RealityKit scene; not swiftc's 26.0 default
 
