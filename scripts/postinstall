@@ -33,7 +33,11 @@ done
 /usr/sbin/chown root:wheel /var/log/clamshellkeeper.log
 /bin/chmod 640 /var/log/clamshellkeeper.log
 
-/bin/launchctl asuser "$SOCK_UID" /bin/launchctl kickstart -k "gui/$SOCK_UID/com.azizzet.clamshellkeeper" 2>/dev/null || true
-/usr/bin/open -a /Applications/ClamshellKeeper.app 2>/dev/null || true
+# Upgrading from before the rename: the old bundle shares the bundle ID, so
+# it has to go or Launch Services may keep opening it.
+/usr/bin/pkill -x ClamshellKeeper 2>/dev/null || true
+/bin/rm -rf /Applications/ClamshellKeeper.app
+
+/bin/launchctl asuser "$SOCK_UID" /usr/bin/open -a "/Applications/Multi Layar.app" 2>/dev/null || true
 
 exit 0

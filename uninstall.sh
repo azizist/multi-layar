@@ -22,7 +22,7 @@ echo "==> quitting the app"
 echo "==> removing files"
 rm -f "/Library/LaunchDaemons/$LABEL.plist"
 rm -f /usr/local/libexec/clamshellkeeperd
-rm -rf /Applications/ClamshellKeeper.app
+rm -rf "/Applications/Multi Layar.app" /Applications/ClamshellKeeper.app
 rm -f /var/log/clamshellkeeper.log
 rm -f /var/run/clamshellkeeper.sock
 /usr/sbin/pkgutil --forget com.azizzet.clamshellkeeper.pkg >/dev/null 2>&1 || true

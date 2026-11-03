@@ -1,4 +1,7 @@
-# ClamshellKeeper
+# Multi Layar
+
+*Formerly ClamshellKeeper. Only the visible name changed: bundle ID, helper and
+paths under `/usr/local` and `/Library` keep the old names, so installs upgrade in place.*
 
 Two things macOS won't do on its own:
 
@@ -13,7 +16,7 @@ EvaluateClamshell. Disable : 0 because {DesktopMode with AC: 0, assertions 0
 [sleepWake] Entering Sleep state due to 'Clamshell Sleep'
 ```
 
-ClamshellKeeper flips that on request, and — more importantly — takes it back automatically the moment it should not be on.
+Multi Layar flips that on request, and — more importantly — takes it back automatically the moment it should not be on.
 
 The second feature exists because macOS 27 has no setting for it. The Displays
 pane's entire vocabulary is *Use as* / *Extended* / *Mirror* / *Stop Mirroring* —
@@ -82,13 +85,14 @@ root and touches no machine state.
 sudo ./install.sh
 ```
 
-This also produces `dist/ClamshellKeeper-1.1.pkg`, which you can double-click, or
-install with `sudo installer -pkg dist/ClamshellKeeper-1.1.pkg -target /`.
+This also produces `dist/MultiLayar-1.1.pkg`, which you can double-click, or
+install with `sudo installer -pkg dist/MultiLayar-1.1.pkg -target /`.
 
 **Run `./phase0-test.sh` first if you have not already.** It proves the underlying
 mechanism works on this Mac and puts everything back afterwards, whatever happens.
 
-Open ClamshellKeeper from `/Applications`; it lives in the menu bar with no Dock icon.
+Open Multi Layar from `/Applications`. It lives in the menu bar; **Open Window…** in its
+popover shows the 3D desk, and Settings can hide the menu bar icon in favour of the Dock.
 
 ### From a downloaded release
 
@@ -101,7 +105,7 @@ an unidentified developer.
 So a downloaded `.pkg` needs one of these:
 
 ```bash
-xattr -d com.apple.quarantine ~/Downloads/ClamshellKeeper-1.1.pkg
+xattr -d com.apple.quarantine ~/Downloads/MultiLayar-1.1.pkg
 ```
 
 …or right-click the package in Finder, choose **Open**, then **Open anyway**.
@@ -112,7 +116,7 @@ you can read what you are about to give a root LaunchDaemon to.
 ### What gets installed
 
 ```
-/Applications/ClamshellKeeper.app                                 menu bar app
+/Applications/Multi Layar.app                                     menu bar app and window
 /usr/local/libexec/clamshellkeeperd                               root helper
 /Library/LaunchDaemons/com.azizzet.clamshellkeeper.helper.plist   loads the helper at boot
 /usr/local/libexec/clamshellkeeper-uninstall.sh                   survives deleting the app
@@ -147,7 +151,7 @@ blind-recovery key: if the built-in is off and the external goes dark, pressing
 ⌃⌥D brings the panel back without needing to see a menu. It is registered with
 Carbon's `RegisterEventHotKey`, so it needs no Accessibility permission and
 prompts for nothing. If another app already owns that combination, that app wins
-and ClamshellKeeper logs the failure rather than failing silently. The menu item is greyed out unless it is safe to engage: the private API
+and Multi Layar logs the failure rather than failing silently. The menu item is greyed out unless it is safe to engage: the private API
 resolved, the lid is open, and there is a confirmed external display.
 
 The first time, a dialog appears on the external asking you to confirm, and
@@ -175,7 +179,7 @@ It restores normal sleep *first*, then removes everything, then proves the flag 
 ## How it works
 
 ```
-/Applications/ClamshellKeeper.app     menu bar, user session, no privilege
+/Applications/Multi Layar.app        menu bar, user session, no privilege
         │  unix socket, mode 0600, owned by you
         │  ARM <displays> <floor> / DISARM / STATUS
         ▼

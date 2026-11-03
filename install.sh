@@ -13,15 +13,20 @@ PLIST="/Library/LaunchDaemons/$LABEL.plist"
 # The invoking (console) user is the only account allowed to reach the helper.
 SOCK_UID="${SUDO_UID:-$(stat -f %u /dev/console)}"
 
+APP="/Applications/Multi Layar.app"
+
 echo "==> copying payload"
-rm -rf /Applications/ClamshellKeeper.app
-ditto build/root/Applications/ClamshellKeeper.app /Applications/ClamshellKeeper.app
+# The app was called ClamshellKeeper before; both share a bundle ID, so the
+# old copy has to go or Launch Services may open either.
+/usr/bin/pkill -x ClamshellKeeper 2>/dev/null || true
+rm -rf /Applications/ClamshellKeeper.app "$APP"
+ditto "build/root/Applications/Multi Layar.app" "$APP"
 install -d -o root -g wheel -m 755 /usr/local/libexec
 install -o root -g wheel -m 755 build/root/usr/local/libexec/clamshellkeeperd /usr/local/libexec/clamshellkeeperd
 install -o root -g wheel -m 755 build/root/usr/local/libexec/clamshellkeeper-uninstall.sh /usr/local/libexec/clamshellkeeper-uninstall.sh
 cp "build/root/Library/LaunchDaemons/$LABEL.plist" "$PLIST"
 /usr/libexec/PlistBuddy -c "Set :Sockets:Listeners:SockPathOwner $SOCK_UID" "$PLIST"
-chown -R root:wheel /Applications/ClamshellKeeper.app
+chown -R root:wheel "$APP"
 chown root:wheel "$PLIST"
 chmod 644 "$PLIST"
 
@@ -56,8 +61,8 @@ ioreg -n IOPMrootDomain -r -d 1 | grep SleepDisabled || echo "  (key absent — 
 echo "==> restarting the menu bar app"
 /usr/bin/pkill -x ClamshellKeeper 2>/dev/null || true
 sleep 1
-/bin/launchctl asuser "$SOCK_UID" /usr/bin/open -a /Applications/ClamshellKeeper.app || true
+/bin/launchctl asuser "$SOCK_UID" /usr/bin/open -a "$APP" || true
 
 echo
-echo "Installed. ClamshellKeeper is running in the menu bar."
+echo "Installed. Multi Layar is running in the menu bar."
 echo "Uninstall any time: sudo /usr/local/libexec/clamshellkeeper-uninstall.sh"
