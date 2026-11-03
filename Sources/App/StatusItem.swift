@@ -370,9 +370,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func installMainMenu() {
         let main = NSMenu()
         let appMenu = NSMenu()
+        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Multi Layar"
+        appMenu.addItem(withTitle: "About \(name)", action: #selector(showAbout), keyEquivalent: "").target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
-        let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Multi Layar"
         appMenu.addItem(withTitle: "Quit \(name)", action: #selector(quit), keyEquivalent: "q").target = self
         main.addItem(withTitle: name, action: nil, keyEquivalent: "").submenu = appMenu
 
@@ -385,6 +387,21 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Actions
+
+    /// The standard panel: name, version and the copyright from Info.plist,
+    /// plus a link to the source.
+    @objc private func showAbout() {
+        let link = "https://github.com/azizist/multi-layar"
+        let credits = NSMutableAttributedString(string: "Source and releases:\n")
+        credits.append(NSAttributedString(string: link, attributes: [.link: URL(string: link)!]))
+        credits.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                             range: NSRange(location: 0, length: credits.length))
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        credits.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: credits.length))
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate(ignoringOtherApps: true)
+    }
 
     @objc private func togglePopover() {
         refreshDeviceState()

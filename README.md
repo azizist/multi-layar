@@ -278,3 +278,7 @@ build.sh test.sh install.sh uninstall.sh phase0-test.sh
 
 Built with `swiftc` directly — no Xcode project. Deployment target is macOS 15.0, the floor set by the 3D window: RealityKit's offscreen
 `RealityRenderer` and the generated meshes and lighting it uses.
+
+## License
+
+MIT © 2026 Abdul Aziz. See [LICENSE](LICENSE).
